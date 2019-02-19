@@ -1,0 +1,119 @@
+<head>
+  <title>PWA</title>
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" type="text/css" href="main.css" />
+  <link rel="icon" href="/e.png" type="image/png" />
+</head>
+
+<body>
+  <div class="revision">Revision 1</div>
+  <img src="pwa-fonts.png" />
+
+  <div class="network-message">
+    Network:
+    <span id="network-status" class="">Good</span>
+  </div>
+
+  <div id="model" style="display: none;">
+    <p>站点发生了更新</p>
+
+    <button onclick="skip()">立即更新</button>
+  </div>
+  <script type="text/javascript">
+
+    function changeModel() {
+      document.getElementById("model").style.display =
+        document.getElementById("model").style.display === "none"
+          ? "block"
+          : "none";
+    }
+
+    function skip() {
+      try {
+        changeModel();
+        navigator.serviceWorker.getRegistration().then(reg => {
+          reg.waiting.postMessage("skipWaiting");
+        });
+      } catch (e) {
+        window.location.reload();
+      }
+    }
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
+
+    // window.killSW = true;
+
+    window.addEventListener("load", function() {
+      const sw = window.navigator.serviceWorker;
+      const killSW = window.killSW || false;
+      if (!sw) {
+        return;
+      }
+
+      // fetch().then(function (status) {
+      //   if (status) {
+      //       // 注销所有已安装的 Service Worker
+      //   } else {
+      //       // 注册 Service Worker
+      //   }
+      // });
+
+      if (!!killSW) {
+        sw.getRegistration("/sw.js").then(registration => {
+          // 手动注销
+          registration.unregister && registration.unregister();
+          // 清除缓存
+          window.caches &&
+            caches.keys &&
+            caches.keys().then(function(keys) {
+              keys.forEach(function(key) {
+                caches.delete(key);
+              });
+            });
+        });
+      } else {
+        // 表示该 sw 监听的是根域名下的请求
+        sw.register("/sw.js", { scope: "/" })
+          .then(registration => {
+            // 注册成功后会进入回调
+            console.log("Registered events at scope: ", registration.scope);
+
+            if (registration.waiting) {
+              // 通知提示栏显示
+              changeModel();
+              return;
+            }
+            // 每当Registration.Installing属性获取新的sw时都会调用该方法
+            registration.onupdatefound = function() {
+              const installingWorker = registration.installing;
+              installingWorker.onstatechange = function() {
+                switch (installingWorker.state) {
+                  case "installed":
+                    // 应为在sw第一次安装的时候也会调用onupdatefound，所以要检查是否已经被sw控制
+                    if (navigator.serviceWorker.controller) {
+                      changeModel();
+                      // 通知提示栏显示
+                    }
+                    break;
+                }
+              };
+            };
+          })
+          .catch(err => {
+            console.error(err);
+          });
+      }
+    });
+
+    fetch("./data.json");
+
+    const statusEl = document.querySelector("#network-status");
+    if (!navigator.onLine) {
+      statusEl.classList = ["is-offline"];
+      statusEl.innerText = "Offline";
+    }
+  </script>
+</body>
